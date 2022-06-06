@@ -39,8 +39,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.InputSource;
 
-import io.prometheus.client.Counter;
-import io.prometheus.client.Gauge;
 import pl.gov.epuap.ws.filerepo.FileRepoService;
 import pl.gov.epuap.ws.filerepo.Filerepo;
 import pl.gov.epuap.ws.filerepo.OdbierzFaultMsg;
@@ -82,26 +80,6 @@ public class EpuapService {
 
     private static final Logger LOG = 
             LoggerFactory.getLogger(EpuapService.class);
-
-    private static final Counter documents_received = Counter.build()
-             .name("documents_received")
-             .help("Number of received documents.")
-             .register();
-
-    private static final Counter documents_sent = Counter.build()
-             .name("documents_sent")
-             .help("Number of sent documents.")
-             .register();
-
-    private static final Gauge documents_received_time = Gauge.build()
-             .name("documents_received_time")
-             .help("Time of last successfull import of documents.")
-             .register();
-
-    private static final Gauge documents_sent_time = Gauge.build()
-             .name("documents_sent_time")
-             .help("Time of last successfull export of documents.")
-             .register();
 
     /** status returned from ePUAP services */
     private static final int STATUS_OK = 1;
@@ -306,9 +284,6 @@ public class EpuapService {
                 bytes);
         LOG.info("imported document from={}, id={}",
                 sender, documentInfo.getDocID());
-
-        documents_received.inc();
-        documents_received_time.setToCurrentTime();
 
         return documentInfo;
     }
@@ -546,7 +521,7 @@ public class EpuapService {
         	LOG.info("extracting zip file {}", zipAtt.getFileName());
             java.nio.file.Path tempDir = Files.createTempDirectory("epuap");
             extractZip(zipAtt, tempDir);
-            try(DirectoryStream<Path> dir = Files.newDirectoryStream(tempDir)){
+			try (DirectoryStream<Path> dir = Files.newDirectoryStream(tempDir)) {
                 for (Path path : dir) {
                     byte[] bytes = Files.readAllBytes(path);
                     EpuapAttachment unzipped = new EpuapAttachment(
@@ -561,14 +536,20 @@ public class EpuapService {
         }
     }
 
-    private void extractZip(EpuapAttachment zipAtt, Path tempDir) throws IOException {
-        try {
-        Utils.extractZip(tempDir, zipAtt.getStream());
-        } catch (IllegalArgumentException e) {
-        // extract files packed in DOS encoding
-        Utils.extractZip(tempDir, zipAtt.getStream(), Charset.forName("CP852"));
-        }
-    }
+    /**
+     * Extracts a zip attachment to a specified directory. 
+     * @param zipAtt an attachment in zip format
+     * @param tempDir a temp directory
+     * @throws IOException
+     */
+	private void extractZip(EpuapAttachment zipAtt, Path tempDir) throws IOException {
+		try {
+			Utils.extractZip(tempDir, zipAtt.getStream());
+		} catch (IllegalArgumentException e) {
+			// extract files packed in DOS encoding
+			Utils.extractZip(tempDir, zipAtt.getStream(), Charset.forName("CP852"));
+		}
+	}
 
     /**
      * Confirms receiving of a document.
@@ -620,7 +601,7 @@ public class EpuapService {
                     docId,
                     null);
             DataHandler file = downloaded.getFile();
-            setFileStreamToAttachment(attachment, file);
+            setFileStreamOnAttachment(attachment, file);
             return attachment;
         } catch (OdbierzFaultMsg e) {
             e.printStackTrace();
@@ -632,7 +613,7 @@ public class EpuapService {
         return null;
     }
 
-    private void setFileStreamToAttachment(EpuapAttachment attachment, DataHandler file) {
+    private void setFileStreamOnAttachment(EpuapAttachment attachment, DataHandler file) {
         try {
             InputStream stream = file.getInputStream();
             attachment.setStream(stream);
@@ -675,9 +656,6 @@ public class EpuapService {
             uppName = resp.getZalacznik().getNazwaPliku();
             uppData = resp.getZalacznik().getZawartosc();
         }
-
-        documents_sent.inc();
-        documents_sent_time.setToCurrentTime();
 
         return new EpuapUPP(resp.getIdentyfikatorDokumentu(),
                 resp.getIdentyfikatorUpp(),
